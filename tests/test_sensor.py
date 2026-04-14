@@ -90,7 +90,7 @@ async def test_live_accumulation_on_state_changes(
         hass.states.async_set(SOURCE, "100.2")
         await hass.async_block_till_done()
         assert sensor.native_value == 0.2
-        assert sensor.extra_state_attributes["raw_energy_kwh"] == 0.2
+        assert sensor.extra_state_attributes["energy_kwh"] == 0.2
 
         freezer.move_to(now + timedelta(minutes=20))
         hass.states.async_set(SOURCE, "100.75")
@@ -139,8 +139,8 @@ async def test_night_multiplier_applied(
 
         # State is raw; attributes expose both raw and night-adjusted values.
         assert sensor.native_value == 2.0
-        assert sensor.extra_state_attributes["raw_energy_kwh"] == 2.0
-        assert sensor.extra_state_attributes["energy_kwh"] == 1.0  # 2.0 * 0.5
+        assert sensor.extra_state_attributes["energy_kwh"] == 2.0
+        assert sensor.extra_state_attributes["adjusted_energy_kwh"] == 1.0  # 2.0 * 0.5
     finally:
         handle.cleanup()
 

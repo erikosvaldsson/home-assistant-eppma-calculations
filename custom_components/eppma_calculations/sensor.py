@@ -303,8 +303,8 @@ class EppmaThisHourSensor(SensorEntity):
         if self._hour_start_time is None:
             return {}
         return {
-            "energy_kwh": round(self._adjusted_kwh, 4),
-            "raw_energy_kwh": round(self._raw_kwh, 4),
+            "energy_kwh": round(self._raw_kwh, 4),
+            "adjusted_energy_kwh": round(self._adjusted_kwh, 4),
             "time_iso": self._hour_start_time.isoformat(),
             "time_epoch": int(self._hour_start_time.timestamp()),
         }

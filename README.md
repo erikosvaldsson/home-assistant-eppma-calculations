@@ -76,8 +76,8 @@ recalculation without waiting for the next top-of-hour tick.
 The two `*_average` sensors expose a `peaks` attribute: a list of the top-N
 peaks, each with:
 
-- `energy_kwh` — the adjusted hourly kWh used in the average
-- `raw_energy_kwh` — the unadjusted hourly kWh
+- `energy_kwh` — the hourly kWh as reported by the source sensor
+- `adjusted_energy_kwh` — the night-multiplier-adjusted value used in the average
 - `time_epoch` — start of the hour as Unix seconds
 - `time_iso` — start of the hour in local-time ISO-8601
 
