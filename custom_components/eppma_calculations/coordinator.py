@@ -109,6 +109,37 @@ class EppmaCoordinator(DataUpdateCoordinator[EppmaData]):
     def _adjust(self, kwh: float, start_local: datetime) -> float:
         return kwh * self.night_multiplier if self._is_night(start_local.hour) else kwh
 
+    async def _fetch_current_hour(
+        self, hour_start_utc: datetime, now_utc: datetime
+    ) -> HourlyPeak | None:
+        """Aggregate 5-minute changes since the top of the current hour."""
+        recorder = get_instance(self.hass)
+        stats = await recorder.async_add_executor_job(
+            statistics_during_period,
+            self.hass,
+            hour_start_utc,
+            now_utc,
+            {self.source_entity},
+            "5minute",
+            None,
+            {"change"},
+        )
+        rows = stats.get(self.source_entity, [])
+        raw = 0.0
+        for row in rows:
+            change = row.get("change")
+            if change is None:
+                continue
+            delta = float(change)
+            if delta > 0:
+                raw += delta
+        hour_start_local = dt_util.as_local(hour_start_utc)
+        return HourlyPeak(
+            start=hour_start_local,
+            raw_kwh=raw,
+            adjusted_kwh=self._adjust(raw, hour_start_local),
+        )
+
     async def _fetch_hourly(
         self, start: datetime, end: datetime
     ) -> list[HourlyPeak]:
