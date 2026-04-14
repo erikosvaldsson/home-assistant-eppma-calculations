@@ -1,0 +1,34 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EPPMA Calculations",
+        "description": "Set up Energy Peaks Per Month Average calculations based on a recorder-backed energy sensor.",
+        "data": {
+          "source_energy_sensor": "Source energy sensor (kWh, total_increasing)",
+          "peaks_per_month": "Number of peaks per month to average",
+          "night_start_hour": "Night period start hour (local)",
+          "night_end_hour": "Night period end hour (local)",
+          "night_multiplier": "Night-hour adjustment multiplier"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This source sensor is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "EPPMA Calculations options",
+        "data": {
+          "source_energy_sensor": "Source energy sensor (kWh, total_increasing)",
+          "peaks_per_month": "Number of peaks per month to average",
+          "night_start_hour": "Night period start hour (local)",
+          "night_end_hour": "Night period end hour (local)",
+          "night_multiplier": "Night-hour adjustment multiplier"
+        }
+      }
+    }
+  }
+}

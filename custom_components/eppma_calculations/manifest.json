@@ -1,0 +1,13 @@
+{
+  "domain": "eppma_calculations",
+  "name": "EPPMA Calculations",
+  "version": "0.1.0",
+  "codeowners": ["@erik-osvaldsson"],
+  "config_flow": true,
+  "dependencies": ["recorder"],
+  "documentation": "https://gitlab.com/erik.osvaldsson/home-assistant-eppma-calculations",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://gitlab.com/erik.osvaldsson/home-assistant-eppma-calculations/-/issues",
+  "requirements": []
+}

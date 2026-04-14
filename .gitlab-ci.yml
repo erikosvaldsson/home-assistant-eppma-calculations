@@ -1,0 +1,31 @@
+stages:
+  - test
+
+.python: &python
+  image: python:3.12-slim
+  before_script:
+    - pip install --quiet --upgrade pipenv
+    - pipenv install --dev --deploy
+  cache:
+    key:
+      files:
+        - Pipfile.lock
+    paths:
+      - .venv/
+  variables:
+    PIPENV_VENV_IN_PROJECT: "1"
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+pytest:
+  <<: *python
+  stage: test
+  script:
+    - pipenv run pytest --junitxml=report.xml -q
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH

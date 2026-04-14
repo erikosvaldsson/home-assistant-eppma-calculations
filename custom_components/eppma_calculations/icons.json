@@ -1,0 +1,26 @@
+{
+  "entity": {
+    "sensor": {
+      "this_month_average": {
+        "default": "mdi:chart-timeline-variant-shimmer"
+      },
+      "this_month_lowest": {
+        "default": "mdi:chart-line-variant"
+      },
+      "last_month_average": {
+        "default": "mdi:chart-timeline-variant"
+      },
+      "last_month_lowest": {
+        "default": "mdi:chart-sankey"
+      },
+      "last_hour": {
+        "default": "mdi:clock-outline"
+      }
+    },
+    "button": {
+      "refresh": {
+        "default": "mdi:refresh"
+      }
+    }
+  }
+}
