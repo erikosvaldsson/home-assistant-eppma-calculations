@@ -137,8 +137,10 @@ async def test_night_multiplier_applied(
         hass.states.async_set(SOURCE, "12.0")
         await hass.async_block_till_done()
 
+        # State is raw; attributes expose both raw and night-adjusted values.
+        assert sensor.native_value == 2.0
         assert sensor.extra_state_attributes["raw_amplitude_kwh"] == 2.0
-        assert sensor.native_value == 1.0  # 2.0 * 0.5
+        assert sensor.extra_state_attributes["amplitude_kwh"] == 1.0  # 2.0 * 0.5
     finally:
         handle.cleanup()
 

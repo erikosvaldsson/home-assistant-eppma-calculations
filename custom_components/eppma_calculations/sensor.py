@@ -98,7 +98,7 @@ SENSORS: tuple[EppmaSensorDescription, ...] = (
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=3,
-        value_fn=lambda d: d.last_hour.adjusted_kwh if d.last_hour else None,
+        value_fn=lambda d: d.last_hour.raw_kwh if d.last_hour else None,
         attrs_fn=lambda d: d.last_hour.as_attribute() if d.last_hour else {},
     ),
 )
@@ -296,7 +296,7 @@ class EppmaThisHourSensor(SensorEntity):
     def native_value(self) -> float | None:
         if self._hour_start_time is None or self._hour_start_value is None:
             return None
-        return round(self._adjusted_kwh, 4)
+        return round(self._raw_kwh, 4)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
