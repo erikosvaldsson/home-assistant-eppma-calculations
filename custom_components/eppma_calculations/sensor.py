@@ -201,24 +201,27 @@ class EppmaThisHourSensor(SensorEntity):
         hour_start_local = now_local.replace(minute=0, second=0, microsecond=0)
         current = _as_float(self.hass.states.get(self._source_entity))
 
-        raw_so_far = 0.0
+        hour_start_value: float | None = None
         try:
-            peak = await self._coordinator._fetch_current_hour(
-                dt_util.as_utc(hour_start_local), dt_util.as_utc(now_local)
+            hour_start_value = await self._coordinator._fetch_hour_start_state(
+                dt_util.as_utc(hour_start_local)
             )
-            if peak is not None:
-                raw_so_far = peak.raw_kwh
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Initial hydration for this_hour failed: %s", err)
 
+        # Fall back to the current reading if no statistic exists yet: the
+        # sensor will start at 0 and accumulate forward.
+        if hour_start_value is None:
+            hour_start_value = current
+
         self._hour_start_time = hour_start_local
+        self._hour_start_value = hour_start_value
         self._last_source_value = current
-        if current is not None:
-            self._hour_start_value = current - raw_so_far
-            self._raw_kwh = raw_so_far
-            self._adjusted_kwh = self._apply_night(raw_so_far)
+        if current is not None and hour_start_value is not None:
+            raw = max(0.0, current - hour_start_value)
+            self._raw_kwh = raw
+            self._adjusted_kwh = self._apply_night(raw)
         else:
-            self._hour_start_value = None
             self._raw_kwh = 0.0
             self._adjusted_kwh = 0.0
 

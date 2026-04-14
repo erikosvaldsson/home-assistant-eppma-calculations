@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import logging
 
-from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder import get_instance, history
 from homeassistant.components.recorder.statistics import statistics_during_period
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -109,36 +109,36 @@ class EppmaCoordinator(DataUpdateCoordinator[EppmaData]):
     def _adjust(self, kwh: float, start_local: datetime) -> float:
         return kwh * self.night_multiplier if self._is_night(start_local.hour) else kwh
 
-    async def _fetch_current_hour(
-        self, hour_start_utc: datetime, now_utc: datetime
-    ) -> HourlyPeak | None:
-        """Aggregate 5-minute changes since the top of the current hour."""
+    async def _fetch_hour_start_state(
+        self, hour_start_utc: datetime
+    ) -> float | None:
+        """Return the source sensor's reading at the top of the current hour.
+
+        Queries the recorder's state history for the last value recorded at
+        or before `hour_start_utc`. This is available within seconds of the
+        source sensor changing state and so avoids the small write lag of
+        long-term statistics.
+        """
         recorder = get_instance(self.hass)
-        stats = await recorder.async_add_executor_job(
-            statistics_during_period,
-            self.hass,
-            hour_start_utc,
-            now_utc,
-            {self.source_entity},
-            "5minute",
-            None,
-            {"change"},
-        )
-        rows = stats.get(self.source_entity, [])
-        raw = 0.0
-        for row in rows:
-            change = row.get("change")
-            if change is None:
-                continue
-            delta = float(change)
-            if delta > 0:
-                raw += delta
-        hour_start_local = dt_util.as_local(hour_start_utc)
-        return HourlyPeak(
-            start=hour_start_local,
-            raw_kwh=raw,
-            adjusted_kwh=self._adjust(raw, hour_start_local),
-        )
+
+        def _query() -> list:
+            changes = history.state_changes_during_period(
+                self.hass,
+                hour_start_utc,
+                hour_start_utc + timedelta(seconds=1),
+                self.source_entity,
+                no_attributes=True,
+                include_start_time_state=True,
+            )
+            return changes.get(self.source_entity, [])
+
+        states = await recorder.async_add_executor_job(_query)
+        if not states:
+            return None
+        try:
+            return float(states[0].state)
+        except (TypeError, ValueError, AttributeError):
+            return None
 
     async def _fetch_hourly(
         self, start: datetime, end: datetime

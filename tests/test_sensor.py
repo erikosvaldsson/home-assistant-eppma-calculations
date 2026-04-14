@@ -54,7 +54,7 @@ async def _add_sensor(
     freezer,
     initial_state: str | None,
     now: datetime,
-    hydration_raw: float = 0.0,
+    hour_start_value: float | None = None,
 ) -> _SensorHandle:
     freezer.move_to(now)
     entry = _make_entry()
@@ -64,18 +64,10 @@ async def _add_sensor(
     if initial_state is not None:
         hass.states.async_set(SOURCE, initial_state)
 
-    from custom_components.eppma_calculations.coordinator import HourlyPeak
+    async def fake_fetch_hour_start(hour_start_utc):
+        return hour_start_value
 
-    hour_start = now.replace(minute=0, second=0, microsecond=0)
-
-    async def fake_fetch_current(hour_start_utc, now_utc):
-        return HourlyPeak(
-            start=dt_util.as_local(hour_start_utc),
-            raw_kwh=hydration_raw,
-            adjusted_kwh=coord._adjust(hydration_raw, hour_start),
-        )
-
-    coord._fetch_current_hour = AsyncMock(side_effect=fake_fetch_current)
+    coord._fetch_hour_start_state = AsyncMock(side_effect=fake_fetch_hour_start)
 
     sensor = EppmaThisHourSensor(coord, entry)
     sensor.hass = hass
@@ -91,7 +83,7 @@ async def test_live_accumulation_on_state_changes(
     coordinator refresh."""
     local_tz = dt_util.DEFAULT_TIME_ZONE
     now = datetime(2026, 4, 14, 14, 0, 30, tzinfo=local_tz)
-    handle = await _add_sensor(hass, freezer, "100.0", now)
+    handle = await _add_sensor(hass, freezer, "100.0", now, hour_start_value=100.0)
     sensor = handle.sensor
     try:
         freezer.move_to(now + timedelta(minutes=5))
@@ -114,7 +106,7 @@ async def test_hour_rollover_resets_counter(
     """Crossing into a new hour re-baselines so the counter starts from zero."""
     local_tz = dt_util.DEFAULT_TIME_ZONE
     now = datetime(2026, 4, 14, 14, 30, 0, tzinfo=local_tz)
-    handle = await _add_sensor(hass, freezer, "200.0", now)
+    handle = await _add_sensor(hass, freezer, "200.0", now, hour_start_value=200.0)
     sensor = handle.sensor
     try:
         freezer.move_to(now + timedelta(minutes=10))
@@ -138,7 +130,7 @@ async def test_night_multiplier_applied(
     local_tz = dt_util.DEFAULT_TIME_ZONE
     # 02:30 is inside the 22→06 night window from the fixture (multiplier 0.5)
     now = datetime(2026, 4, 14, 2, 30, 0, tzinfo=local_tz)
-    handle = await _add_sensor(hass, freezer, "10.0", now)
+    handle = await _add_sensor(hass, freezer, "10.0", now, hour_start_value=10.0)
     sensor = handle.sensor
     try:
         freezer.move_to(now + timedelta(minutes=5))
@@ -158,7 +150,7 @@ async def test_counter_reset_rebaselines(
     instead of going negative."""
     local_tz = dt_util.DEFAULT_TIME_ZONE
     now = datetime(2026, 4, 14, 14, 10, 0, tzinfo=local_tz)
-    handle = await _add_sensor(hass, freezer, "500.0", now)
+    handle = await _add_sensor(hass, freezer, "500.0", now, hour_start_value=500.0)
     sensor = handle.sensor
     try:
         freezer.move_to(now + timedelta(minutes=5))
@@ -182,19 +174,21 @@ async def test_counter_reset_rebaselines(
 async def test_hydrates_from_recorder_on_startup(
     enable_custom_integrations, hass: HomeAssistant, freezer
 ) -> None:
-    """On startup mid-hour, the sensor is pre-populated from recorder 5-minute
-    stats so it doesn't appear as zero."""
+    """On startup mid-hour, the baseline is taken from the previous hour's
+    long-term statistic so `this_hour` reflects true consumption, not just
+    what was seen since HA started."""
     local_tz = dt_util.DEFAULT_TIME_ZONE
     now = datetime(2026, 4, 14, 14, 40, 0, tzinfo=local_tz)
-    handle = await _add_sensor(hass, freezer, "50.0", now, hydration_raw=0.8)
+    # Source currently reads 50.0; at the top of 14:00 the cumulative value
+    # was 49.2 → already 0.8 kWh consumed this hour.
+    handle = await _add_sensor(hass, freezer, "50.0", now, hour_start_value=49.2)
     sensor = handle.sensor
     try:
-        assert sensor.native_value == 0.8  # pre-populated, day hour
+        assert sensor.native_value == 0.8  # day hour → no multiplier
 
         freezer.move_to(now + timedelta(minutes=5))
         hass.states.async_set(SOURCE, "50.1")
         await hass.async_block_till_done()
-        # baseline was 50.0 - 0.8 = 49.2; delta to 50.1 → 0.9
-        assert sensor.native_value == 0.9
+        assert sensor.native_value == 0.9  # 50.1 - 49.2
     finally:
         handle.cleanup()
