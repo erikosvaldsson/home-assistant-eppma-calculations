@@ -114,8 +114,8 @@ def test_hourly_peak_as_attribute_shape() -> None:
     ts = "2026-04-01T10:00:00+00:00"
     p = HourlyPeak(start=datetime.fromisoformat(ts), raw_kwh=2.1234567, adjusted_kwh=1.0617283)
     attrs = p.as_attribute()
-    assert set(attrs) == {"amplitude_kwh", "raw_amplitude_kwh", "time_epoch", "time_iso"}
-    assert attrs["amplitude_kwh"] == 1.0617
-    assert attrs["raw_amplitude_kwh"] == 2.1235
+    assert set(attrs) == {"energy_kwh", "raw_energy_kwh", "time_epoch", "time_iso"}
+    assert attrs["energy_kwh"] == 1.0617
+    assert attrs["raw_energy_kwh"] == 2.1235
     assert attrs["time_iso"] == ts
     assert attrs["time_epoch"] == int(datetime.fromisoformat(ts).timestamp())

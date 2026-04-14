@@ -39,8 +39,8 @@ class HourlyPeak:
 
     def as_attribute(self) -> dict:
         return {
-            "amplitude_kwh": round(self.adjusted_kwh, 4),
-            "raw_amplitude_kwh": round(self.raw_kwh, 4),
+            "energy_kwh": round(self.adjusted_kwh, 4),
+            "raw_energy_kwh": round(self.raw_kwh, 4),
             "time_epoch": int(self.start.timestamp()),
             "time_iso": self.start.isoformat(),
         }
