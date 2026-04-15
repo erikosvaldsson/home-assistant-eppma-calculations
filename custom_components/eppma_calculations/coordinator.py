@@ -140,6 +140,36 @@ class EppmaCoordinator(DataUpdateCoordinator[EppmaData]):
         except (TypeError, ValueError, AttributeError):
             return None
 
+    async def _fetch_last_closed_hour(self) -> HourlyPeak | None:
+        """Return consumption for the hour that just closed.
+
+        Read directly from state history so the value is available as soon
+        as HA records a state past the hour boundary.
+        """
+        now_local = dt_util.now()
+        current_hour_local = now_local.replace(
+            minute=0, second=0, microsecond=0
+        )
+        last_hour_local = current_hour_local - timedelta(hours=1)
+
+        start_val = await self._fetch_hour_start_state(
+            dt_util.as_utc(last_hour_local)
+        )
+        end_val = await self._fetch_hour_start_state(
+            dt_util.as_utc(current_hour_local)
+        )
+        if start_val is None or end_val is None:
+            return None
+
+        raw = end_val - start_val
+        if raw < 0:
+            raw = 0.0
+        return HourlyPeak(
+            start=last_hour_local,
+            raw_kwh=raw,
+            adjusted_kwh=self._adjust(raw, last_hour_local),
+        )
+
     async def _fetch_hourly(
         self, start: datetime, end: datetime
     ) -> list[HourlyPeak]:
@@ -233,10 +263,7 @@ class EppmaCoordinator(DataUpdateCoordinator[EppmaData]):
             cur_low = min((p.adjusted_kwh for p in cur_peaks), default=0.0)
             prev_low = min((p.adjusted_kwh for p in prev_peaks), default=0.0)
 
-            latest_pool = cur_hourly or prev_hourly
-            last_hour = (
-                max(latest_pool, key=lambda p: p.start) if latest_pool else None
-            )
+            last_hour = await self._fetch_last_closed_hour()
 
             return EppmaData(
                 current_month_peaks=cur_peaks,

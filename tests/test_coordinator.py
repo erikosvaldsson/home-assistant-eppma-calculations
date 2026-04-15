@@ -121,7 +121,9 @@ async def test_update_computes_peaks_and_average(
             )
         return out
 
-    with patch.object(coord, "_fetch_hourly", side_effect=fake_fetch):
+    with patch.object(coord, "_fetch_hourly", side_effect=fake_fetch), patch.object(
+        coord, "_fetch_last_closed_hour", return_value=None
+    ):
         data = await coord._async_update_data()
 
     assert len(data.current_month_peaks) == 3
@@ -181,7 +183,9 @@ async def test_start_of_new_month_returns_none_for_this_month(
             return []
         return prev_month_rows
 
-    with patch.object(coord, "_fetch_hourly", side_effect=fake_fetch):
+    with patch.object(coord, "_fetch_hourly", side_effect=fake_fetch), patch.object(
+        coord, "_fetch_last_closed_hour", return_value=None
+    ):
         data = await coord._async_update_data()
 
     # "This month" has no data yet — return 0, not None
@@ -228,7 +232,9 @@ async def test_second_hour_of_new_month_uses_single_peak_straight_through(
             return cur_rows
         return []
 
-    with patch.object(coord, "_fetch_hourly", side_effect=fake_fetch):
+    with patch.object(coord, "_fetch_hourly", side_effect=fake_fetch), patch.object(
+        coord, "_fetch_last_closed_hour", return_value=None
+    ):
         data = await coord._async_update_data()
 
     expected_adjusted = raw * 0.5  # night multiplier applied to 00:00
@@ -258,7 +264,9 @@ async def test_last_hour_of_previous_month_does_not_leak_into_this_month(
         captured[bucket] = (start, end)
         return []
 
-    with patch.object(coord, "_fetch_hourly", side_effect=fake_fetch):
+    with patch.object(coord, "_fetch_hourly", side_effect=fake_fetch), patch.object(
+        coord, "_fetch_last_closed_hour", return_value=None
+    ):
         await coord._async_update_data()
 
     cur_start, cur_end = captured["cur"]
@@ -282,7 +290,9 @@ async def test_update_handles_empty_history(
     async def fake_empty(start, end):
         return []
 
-    with patch.object(coord, "_fetch_hourly", side_effect=fake_empty):
+    with patch.object(coord, "_fetch_hourly", side_effect=fake_empty), patch.object(
+        coord, "_fetch_last_closed_hour", return_value=None
+    ):
         data = await coord._async_update_data()
 
     assert data.current_month_peaks == []
@@ -294,78 +304,123 @@ async def test_update_handles_empty_history(
     assert data.last_hour is None
 
 
-async def test_last_hour_is_most_recent_sample(
-    enable_custom_integrations, hass: HomeAssistant
-) -> None:
-    """`last_hour` exposes the latest hourly sample (adjusted for night hours)."""
-    coord = await _build_coordinator(hass)
-
-    now = dt_util.now().replace(hour=12, minute=0, second=0, microsecond=0)
-    month_start = now.replace(day=1)
-    # Deliberately unordered; latest is day 4 @ 16:00.
-    cur_rows = [
-        {"start": month_start.replace(day=3, hour=15), "change": 4.0},
-        {"start": month_start.replace(day=4, hour=16), "change": 6.0},
-        {"start": month_start.replace(day=2, hour=14), "change": 2.0},
-    ]
-
-    async def fake_fetch(start, end):
-        start_local = dt_util.as_local(start)
-        if start_local.month != month_start.month:
-            return []
-        from custom_components.eppma_calculations.coordinator import HourlyPeak
-        return [
-            HourlyPeak(
-                start=row["start"],
-                raw_kwh=float(row["change"]),
-                adjusted_kwh=coord._adjust(float(row["change"]), row["start"]),
-            )
-            for row in cur_rows
-        ]
-
-    with patch.object(coord, "_fetch_hourly", side_effect=fake_fetch):
-        data = await coord._async_update_data()
-
-    assert data.last_hour is not None
-    assert data.last_hour.start == month_start.replace(day=4, hour=16)
-    assert data.last_hour.raw_kwh == 6.0
-    assert data.last_hour.adjusted_kwh == 6.0  # 16:00 is a day hour
-
-
-async def test_last_hour_falls_back_to_previous_month(
+async def test_last_hour_reads_state_history_at_hour_boundaries(
     enable_custom_integrations, hass: HomeAssistant, freezer
 ) -> None:
-    """At the very start of a new month, `last_hour` falls back to the
-    latest sample from the previous month so the sensor isn't dark."""
+    """`last_hour` is derived from the source sensor's state at the two
+    hour boundaries (not from the long-term statistics bucket), so it
+    reflects the hour that just closed as soon as the refresh fires."""
     coord = await _build_coordinator(hass)
 
     local_tz = dt_util.DEFAULT_TIME_ZONE
-    frozen = datetime(2026, 4, 1, 0, 5, 0, tzinfo=local_tz)
+    frozen = datetime(2026, 4, 15, 14, 0, 0, tzinfo=local_tz)
     freezer.move_to(frozen)
 
-    from custom_components.eppma_calculations.coordinator import HourlyPeak
-
-    latest_prev = HourlyPeak(
-        start=datetime(2026, 3, 31, 23, 0, tzinfo=local_tz),
-        raw_kwh=3.0,
-        adjusted_kwh=1.5,  # night multiplier applied
-    )
-    prev_rows = [
-        HourlyPeak(
-            start=datetime(2026, 3, 15, 16, 0, tzinfo=local_tz),
-            raw_kwh=7.0,
-            adjusted_kwh=7.0,
-        ),
-        latest_prev,
-    ]
-
-    async def fake_fetch(start, end):
+    # Only the 12:00-13:00 statistics bucket is present; the 13:00-14:00
+    # bucket has not been compiled yet at 14:00:00.
+    async def fake_fetch_hourly(start, end):
+        from custom_components.eppma_calculations.coordinator import HourlyPeak
         start_local = dt_util.as_local(start)
         if start_local.month == 4 and start_local.year == 2026:
-            return []
-        return prev_rows
+            return [
+                HourlyPeak(
+                    start=datetime(2026, 4, 15, 12, 0, tzinfo=local_tz),
+                    raw_kwh=1.0,
+                    adjusted_kwh=1.0,
+                )
+            ]
+        return []
 
-    with patch.object(coord, "_fetch_hourly", side_effect=fake_fetch):
+    async def fake_fetch_boundary(hour_start_utc):
+        local = dt_util.as_local(hour_start_utc)
+        if local.hour == 13 and local.day == 15:
+            return 100.0
+        if local.hour == 14 and local.day == 15:
+            return 105.0
+        return None
+
+    with patch.object(coord, "_fetch_hourly", side_effect=fake_fetch_hourly), patch.object(
+        coord, "_fetch_hour_start_state", side_effect=fake_fetch_boundary
+    ):
         data = await coord._async_update_data()
 
-    assert data.last_hour == latest_prev
+    assert data.last_hour is not None
+    assert data.last_hour.start == datetime(2026, 4, 15, 13, 0, tzinfo=local_tz)
+    assert data.last_hour.raw_kwh == pytest.approx(5.0)
+    assert data.last_hour.adjusted_kwh == pytest.approx(5.0)  # 13:00 is daytime
+
+
+async def test_last_hour_applies_night_multiplier(
+    enable_custom_integrations, hass: HomeAssistant, freezer
+) -> None:
+    coord = await _build_coordinator(hass)
+    local_tz = dt_util.DEFAULT_TIME_ZONE
+    freezer.move_to(datetime(2026, 4, 15, 3, 0, 0, tzinfo=local_tz))
+
+    async def fake_fetch_boundary(hour_start_utc):
+        local = dt_util.as_local(hour_start_utc)
+        if local.hour == 2:
+            return 200.0
+        if local.hour == 3:
+            return 208.0
+        return None
+
+    with patch.object(
+        coord, "_fetch_hourly", return_value=[]
+    ), patch.object(
+        coord, "_fetch_hour_start_state", side_effect=fake_fetch_boundary
+    ):
+        data = await coord._async_update_data()
+
+    assert data.last_hour is not None
+    assert data.last_hour.raw_kwh == pytest.approx(8.0)
+    assert data.last_hour.adjusted_kwh == pytest.approx(4.0)  # 02:00 is night
+
+
+async def test_last_hour_is_none_when_state_history_missing(
+    enable_custom_integrations, hass: HomeAssistant, freezer
+) -> None:
+    coord = await _build_coordinator(hass)
+    local_tz = dt_util.DEFAULT_TIME_ZONE
+    freezer.move_to(datetime(2026, 4, 15, 14, 0, 0, tzinfo=local_tz))
+
+    async def no_state(hour_start_utc):
+        return None
+
+    with patch.object(
+        coord, "_fetch_hourly", return_value=[]
+    ), patch.object(
+        coord, "_fetch_hour_start_state", side_effect=no_state
+    ):
+        data = await coord._async_update_data()
+
+    assert data.last_hour is None
+
+
+async def test_last_hour_clips_counter_reset_to_zero(
+    enable_custom_integrations, hass: HomeAssistant, freezer
+) -> None:
+    """If the end-boundary state is lower than the start-boundary state
+    (source counter reset), raw consumption is clamped to 0."""
+    coord = await _build_coordinator(hass)
+    local_tz = dt_util.DEFAULT_TIME_ZONE
+    freezer.move_to(datetime(2026, 4, 15, 14, 0, 0, tzinfo=local_tz))
+
+    async def reset_boundary(hour_start_utc):
+        local = dt_util.as_local(hour_start_utc)
+        if local.hour == 13:
+            return 9999.0
+        if local.hour == 14:
+            return 3.0
+        return None
+
+    with patch.object(
+        coord, "_fetch_hourly", return_value=[]
+    ), patch.object(
+        coord, "_fetch_hour_start_state", side_effect=reset_boundary
+    ):
+        data = await coord._async_update_data()
+
+    assert data.last_hour is not None
+    assert data.last_hour.raw_kwh == 0.0
+    assert data.last_hour.adjusted_kwh == 0.0
