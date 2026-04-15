@@ -112,20 +112,21 @@ class EppmaCoordinator(DataUpdateCoordinator[EppmaData]):
     async def _fetch_hour_start_state(
         self, hour_start_utc: datetime
     ) -> float | None:
-        """Return the source sensor's reading at the top of the current hour.
+        """Return the source sensor's reading at the top of the hour.
 
-        Queries the recorder's state history for the last value recorded at
-        or before `hour_start_utc`. This is available within seconds of the
-        source sensor changing state and so avoids the small write lag of
-        long-term statistics.
+        Looks in the 60-second window ending at `hour_start_utc` and returns
+        the most recent numeric state in that window. A wider window tolerates
+        the sensor briefly reporting `unknown`/`unavailable` around the hour
+        boundary.
         """
         recorder = get_instance(self.hass)
+        window_start = hour_start_utc - timedelta(seconds=60)
 
         def _query() -> list:
             changes = history.state_changes_during_period(
                 self.hass,
+                window_start,
                 hour_start_utc,
-                hour_start_utc + timedelta(seconds=1),
                 self.source_entity,
                 no_attributes=True,
                 include_start_time_state=True,
@@ -134,11 +135,24 @@ class EppmaCoordinator(DataUpdateCoordinator[EppmaData]):
 
         states = await recorder.async_add_executor_job(_query)
         if not states:
+            _LOGGER.debug(
+                "No state history for %s in 60s window ending %s",
+                self.source_entity,
+                hour_start_utc.isoformat(),
+            )
             return None
-        try:
-            return float(states[0].state)
-        except (TypeError, ValueError, AttributeError):
-            return None
+        for state in reversed(states):
+            try:
+                return float(state.state)
+            except (TypeError, ValueError, AttributeError):
+                continue
+        _LOGGER.debug(
+            "No numeric state for %s in 60s window ending %s (saw %s)",
+            self.source_entity,
+            hour_start_utc.isoformat(),
+            [getattr(s, "state", None) for s in states],
+        )
+        return None
 
     async def _fetch_last_closed_hour(self) -> HourlyPeak | None:
         """Return consumption for the hour that just closed.
@@ -159,6 +173,14 @@ class EppmaCoordinator(DataUpdateCoordinator[EppmaData]):
             dt_util.as_utc(current_hour_local)
         )
         if start_val is None or end_val is None:
+            _LOGGER.debug(
+                "last_hour unavailable for %s: start=%s end=%s (boundaries %s / %s)",
+                self.source_entity,
+                start_val,
+                end_val,
+                last_hour_local.isoformat(),
+                current_hour_local.isoformat(),
+            )
             return None
 
         raw = end_val - start_val
