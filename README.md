@@ -36,7 +36,7 @@ it.
 ### HACS (custom repository)
 
 1. HACS → Integrations → ⋮ → *Custom repositories*.
-2. Add `https://gitlab.com/erik.osvaldsson/home-assistant-eppma-calculations`
+2. Add `https://github.com/erikosvaldsson/home-assistant-eppma-calculations`
    as an **Integration**.
 3. Install *EPPMA Calculations*, then restart Home Assistant.
 
