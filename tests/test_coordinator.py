@@ -62,6 +62,32 @@ async def test_adjust_applies_multiplier_only_at_night(
     assert coord._adjust(4.0, day) == 4.0
 
 
+async def test_night_multiplier_of_zero_excludes_night_hours(
+    enable_custom_integrations, hass: HomeAssistant
+) -> None:
+    """Multiplier of 0 means night hours contribute 0 to the average — any
+    candidate peak that falls inside the night window is effectively ignored."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_SOURCE_ENERGY_SENSOR: "sensor.fake_energy",
+            CONF_PEAKS_PER_MONTH: 3,
+            CONF_NIGHT_START_HOUR: 22,
+            CONF_NIGHT_END_HOUR: 6,
+            CONF_NIGHT_MULTIPLIER: 0.0,
+        },
+        options={},
+        entry_id="zero-mult",
+    )
+    entry.add_to_hass(hass)
+    coord = EppmaCoordinator(hass, entry)
+
+    night = datetime(2026, 4, 14, 2, 0, tzinfo=timezone.utc)
+    day = datetime(2026, 4, 14, 14, 0, tzinfo=timezone.utc)
+    assert coord._adjust(4.0, night) == 0.0
+    assert coord._adjust(4.0, day) == 4.0
+
+
 async def test_month_bounds_rolls_into_next_month(
     enable_custom_integrations, hass: HomeAssistant
 ) -> None:

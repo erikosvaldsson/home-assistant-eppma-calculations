@@ -72,7 +72,7 @@ def _base_schema(defaults: dict[str, Any]) -> vol.Schema:
                 ),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=0.1, max=1.0, step=0.05,
+                    min=0.0, max=1.0, step=0.05,
                     mode=selector.NumberSelectorMode.BOX,
                 )
             ),
