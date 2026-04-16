@@ -33,6 +33,12 @@ it.
 
 ## Installation
 
+### GPM (Git Package Manager)
+
+1. GPM → Integrations → Add package.
+2. Enter `https://gitlab.com/erik.osvaldsson/home-assistant-eppma-calculations`.
+3. Install and restart Home Assistant.
+
 ### HACS (custom repository)
 
 1. HACS → Integrations → ⋮ → *Custom repositories*.
