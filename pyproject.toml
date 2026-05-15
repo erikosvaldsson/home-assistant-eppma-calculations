@@ -1,0 +1,20 @@
+[project]
+name = "home-assistant-eppma-calculations"
+version = "0.0.1"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-homeassistant-custom-component",
+]
+
+[tool.uv]
+package = false
+default-groups = "all"
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
