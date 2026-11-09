@@ -7,7 +7,6 @@ import logging
 from typing import Any, Callable
 
 from homeassistant.components.sensor import (
-    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
@@ -53,7 +52,6 @@ SENSORS: tuple[EppmaSensorDescription, ...] = (
         translation_key="this_month_average",
         name="This month average",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=3,
         value_fn=lambda d: d.current_month_average,
@@ -64,7 +62,6 @@ SENSORS: tuple[EppmaSensorDescription, ...] = (
         translation_key="this_month_lowest",
         name="This month lowest",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=3,
         value_fn=lambda d: d.current_month_lowest_peak,
@@ -74,7 +71,6 @@ SENSORS: tuple[EppmaSensorDescription, ...] = (
         translation_key="last_month_average",
         name="Last month average",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=3,
         value_fn=lambda d: d.last_month_average,
@@ -85,7 +81,6 @@ SENSORS: tuple[EppmaSensorDescription, ...] = (
         translation_key="last_month_lowest",
         name="Last month lowest",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=3,
         value_fn=lambda d: d.last_month_lowest_peak,
@@ -95,7 +90,6 @@ SENSORS: tuple[EppmaSensorDescription, ...] = (
         translation_key="last_hour",
         name="Last hour",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=3,
         value_fn=lambda d: d.last_hour.raw_kwh if d.last_hour else None,
@@ -172,7 +166,6 @@ class EppmaThisHourSensor(SensorEntity):
     _attr_translation_key = "this_hour"
     _attr_name = "This hour"
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 3
 
